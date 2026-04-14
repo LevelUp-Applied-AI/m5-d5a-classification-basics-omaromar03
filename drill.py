@@ -1,93 +1,139 @@
-"""
-Module 5 Week A — Core Skills Drill: Classification & Evaluation Basics
-
-Complete the three functions below. Each function has a docstring
-describing its inputs, outputs, and purpose.
-
-Run your work: python drill.py
-Test your work: the autograder runs automatically when you open a PR.
-"""
-
-import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+import pandas as pd
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
-def split_data(df, target_col="churned", test_size=0.2, random_state=42):
-    """Split a DataFrame into train and test sets with stratification.
+def split_dataset(df):
+    """
+    Split dataset into train/test sets using the target column 'churned'.
 
-    Args:
-        df: DataFrame with features and target column.
-        target_col: Name of the target column.
-        test_size: Fraction of data to use for testing.
-        random_state: Random seed for reproducibility.
+    Requirements:
+    - 80% train / 20% test
+    - random_state=42
+    - stratify on target
+    - verify split sizes
+    - verify churn rate preserved within 2 percentage points
 
     Returns:
-        Tuple of (X_train, X_test, y_train, y_test).
+        tuple: (X_train, X_test, y_train, y_test)
     """
-    # TODO: Separate features (X) and target (y), then split with stratification
-    pass
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Input must be a pandas DataFrame.")
+
+    if "churned" not in df.columns:
+        raise ValueError("DataFrame must contain a 'churned' column.")
+
+    # Separate features and target
+    X = df.drop(columns=["churned"]).copy()
+    y = df["churned"].copy()
+
+    # Optional: drop customer identifier if present
+    if "customer_id" in X.columns:
+        X = X.drop(columns=["customer_id"])
+
+    # Encode categorical columns
+    X = pd.get_dummies(X, drop_first=True)
+
+    # Split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
+
+    # Verify split sizes
+    total_rows = len(df)
+    expected_test_size = int(round(total_rows * 0.2))
+    expected_train_size = total_rows - expected_test_size
+
+    if len(X_train) != expected_train_size:
+        raise ValueError("Training set size is incorrect.")
+    if len(X_test) != expected_test_size:
+        raise ValueError("Test set size is incorrect.")
+
+    # Verify class distribution preserved within 2 percentage points
+    original_rate = y.mean()
+    train_rate = y_train.mean()
+    test_rate = y_test.mean()
+
+    if abs(train_rate - original_rate) > 0.02:
+        raise ValueError("Training set churn rate differs from original by more than 2 percentage points.")
+    if abs(test_rate - original_rate) > 0.02:
+        raise ValueError("Test set churn rate differs from original by more than 2 percentage points.")
+
+    return X_train, X_test, y_train, y_test
 
 
-def compute_classification_metrics(y_true, y_pred):
-    """Compute classification metrics from true and predicted labels.
-
-    Args:
-        y_true: Array of true labels (0 or 1).
-        y_pred: Array of predicted labels (0 or 1).
+def calculate_classification_metrics(y_true, y_pred):
+    """
+    Compute classification metrics.
 
     Returns:
-        Dictionary with keys: 'accuracy', 'precision', 'recall', 'f1'.
-        Values are floats.
+        dict with keys:
+        - accuracy
+        - precision
+        - recall
+        - f1
     """
-    # TODO: Compute all four metrics using scikit-learn functions
-    pass
+    return {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+    }
 
 
-def run_cross_validation(X_train, y_train, n_folds=5, random_state=42):
-    """Run stratified k-fold cross-validation with LogisticRegression.
+def run_cross_validation(X_train, y_train):
+    """
+    Run 5-fold stratified cross-validation using LogisticRegression.
 
-    Args:
-        X_train: Training features (numeric only).
-        y_train: Training labels.
-        n_folds: Number of CV folds.
-        random_state: Random seed.
+    Model settings:
+    - random_state=42
+    - max_iter=1000
+    - class_weight='balanced'
+
+    Scoring:
+    - accuracy
 
     Returns:
-        Dictionary with keys: 'scores' (array of fold scores),
-        'mean' (float), 'std' (float).
+        dict with keys:
+        - scores
+        - mean
+        - std
     """
-    # TODO: Create a LogisticRegression model and run cross_val_score
-    pass
+    # Ensure X_train is a DataFrame for safe encoding if needed
+    if isinstance(X_train, np.ndarray):
+        X_train = pd.DataFrame(X_train)
 
+    # Encode categorical columns if any remain
+    X_train_encoded = pd.get_dummies(X_train, drop_first=True)
 
-if __name__ == "__main__":
-    # Load data
-    df = pd.read_csv("data/telecom_churn.csv")
-    print(f"Loaded {len(df)} rows")
+    model = LogisticRegression(
+        random_state=42,
+        max_iter=1000,
+        class_weight="balanced"
+    )
 
-    # Task 1: Split
-    numeric_cols = ["tenure", "monthly_charges", "total_charges",
-                    "num_support_calls", "senior_citizen", "has_partner",
-                    "has_dependents"]
-    df_numeric = df[numeric_cols + ["churned"]]
+    cv = StratifiedKFold(
+        n_splits=5,
+        shuffle=True,
+        random_state=42
+    )
 
-    result = split_data(df_numeric)
-    if result is not None:
-        X_train, X_test, y_train, y_test = result
-        print(f"Train: {len(X_train)}, Test: {len(X_test)}")
+    scores = cross_val_score(
+        model,
+        X_train_encoded,
+        y_train,
+        cv=cv,
+        scoring="accuracy"
+    )
 
-        # Task 2: Metrics
-        model = LogisticRegression(random_state=42, max_iter=1000, class_weight="balanced")
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        metrics = compute_classification_metrics(y_test, y_pred)
-        if metrics:
-            print(f"Metrics: {metrics}")
-
-        # Task 3: Cross-validation
-        cv_results = run_cross_validation(X_train, y_train)
-        if cv_results:
-            print(f"CV: {cv_results['mean']:.3f} +/- {cv_results['std']:.3f}")
+    return {
+        "scores": scores,
+        "mean": float(np.mean(scores)),
+        "std": float(np.std(scores))
+    }
