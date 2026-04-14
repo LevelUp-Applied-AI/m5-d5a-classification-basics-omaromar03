@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
-def split_dataset(df):
+def split_data(df):
     """
     Split dataset into train/test sets using the target column 'churned'.
 
@@ -25,18 +25,14 @@ def split_dataset(df):
     if "churned" not in df.columns:
         raise ValueError("DataFrame must contain a 'churned' column.")
 
-    # Separate features and target
     X = df.drop(columns=["churned"]).copy()
     y = df["churned"].copy()
 
-    # Optional: drop customer identifier if present
     if "customer_id" in X.columns:
         X = X.drop(columns=["customer_id"])
 
-    # Encode categorical columns
     X = pd.get_dummies(X, drop_first=True)
 
-    # Split
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
@@ -45,7 +41,6 @@ def split_dataset(df):
         stratify=y
     )
 
-    # Verify split sizes
     total_rows = len(df)
     expected_test_size = int(round(total_rows * 0.2))
     expected_train_size = total_rows - expected_test_size
@@ -55,20 +50,20 @@ def split_dataset(df):
     if len(X_test) != expected_test_size:
         raise ValueError("Test set size is incorrect.")
 
-    # Verify class distribution preserved within 2 percentage points
     original_rate = y.mean()
     train_rate = y_train.mean()
     test_rate = y_test.mean()
 
     if abs(train_rate - original_rate) > 0.02:
         raise ValueError("Training set churn rate differs from original by more than 2 percentage points.")
+
     if abs(test_rate - original_rate) > 0.02:
         raise ValueError("Test set churn rate differs from original by more than 2 percentage points.")
 
     return X_train, X_test, y_train, y_test
 
 
-def calculate_classification_metrics(y_true, y_pred):
+def compute_classification_metrics(y_true, y_pred):
     """
     Compute classification metrics.
 
@@ -105,11 +100,9 @@ def run_cross_validation(X_train, y_train):
         - mean
         - std
     """
-    # Ensure X_train is a DataFrame for safe encoding if needed
     if isinstance(X_train, np.ndarray):
         X_train = pd.DataFrame(X_train)
 
-    # Encode categorical columns if any remain
     X_train_encoded = pd.get_dummies(X_train, drop_first=True)
 
     model = LogisticRegression(
